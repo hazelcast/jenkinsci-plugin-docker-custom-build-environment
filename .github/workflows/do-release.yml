@@ -42,12 +42,12 @@ jobs:
       run: |
         mvn versions:set -B -DgenerateBackupPoms=false -DnewVersion=${{ github.event.inputs.release-version }}
         git commit -am "Release ${{ github.event.inputs.release-version }}"
-        git tag docker-custom-build-environment-${{ github.event.inputs.release-version }}
+        git tag v${{ github.event.inputs.release-version }}
         mvn clean install -B
         mvn deploy -B -Prelease -DskipTests
         mvn versions:set -B -DgenerateBackupPoms=false -DnewVersion=${{ github.event.inputs.next-snapshot-version }}
         git commit -am "Next version is ${{ github.event.inputs.next-snapshot-version }}"
-        git push origin v${{ github.event.inputs.release-version }} main
+        git push origin v${{ github.event.inputs.release-version }} hazelcast-patches
       env:
         MAVEN_USERNAME: ${{ secrets.SONATYPE_OSS_USERNAME }}
         MAVEN_PASSWORD: ${{ secrets.SONATYPE_OSS_PASSWORD }}
