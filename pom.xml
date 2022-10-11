@@ -70,9 +70,9 @@
     </dependencies>
 
     <scm>
-        <url>https://github.com/jenkinsci/docker-custom-build-environment-plugin</url>
-        <connection>scm:git:https://github.com/jenkinsci/docker-custom-build-environment-plugin.git</connection>
-        <developerConnection>scm:git:git@github.com:jenkinsci/docker-custom-build-environment-plugin.git</developerConnection>
+        <url>https://github.com/hazelcast/jenkinsci-plugin-docker-custom-build-environment</url>
+        <connection>scm:git:https://github.com/hazelcast/jenkinsci-plugin-docker-custom-build-environment.git</connection>
+        <developerConnection>scm:git:git@github.com:hazelcast/jenkinsci-plugin-docker-custom-build-environment.git</developerConnection>
         <tag>docker-custom-build-environment-1.7.0</tag>
     </scm>
 
