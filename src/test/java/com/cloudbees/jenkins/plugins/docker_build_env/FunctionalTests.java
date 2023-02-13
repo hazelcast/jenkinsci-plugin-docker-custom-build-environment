@@ -5,7 +5,6 @@ import hudson.model.FreeStyleProject;
 import hudson.model.Result;
 import hudson.tasks.Shell;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
 import org.jenkinsci.plugins.docker.commons.credentials.DockerServerEndpoint;
 import org.junit.Rule;
 import org.junit.Test;
@@ -87,7 +86,8 @@ public class FunctionalTests {
         String dockerfile = String.join(
                                         "\n",
                                         "FROM python:3.6.4-alpine3.4",
-                                        "RUN echo Successfully built THIS_STRING_SHOULD_NOT_BE_CAPTURED_AS_IMAGE_ID",
+//                                        "RUN echo Successfully built THIS_STRING_SHOULD_NOT_BE_CAPTURED_AS_IMAGE_ID",
+//                                        "RUN echo writing image THIS_STRING_SHOULD_NOT_BE_CAPTURED_AS_IMAGE_ID done",
                                         "RUN pip install simplejson==3.13.2"
         );
         project.setScm(new SingleFileSCM("Dockerfile", dockerfile));

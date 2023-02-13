@@ -6,26 +6,40 @@ import hudson.Launcher;
 import hudson.model.AbstractBuild;
 import hudson.model.Computer;
 import hudson.model.TaskListener;
+import hudson.remoting.VirtualChannel;
 import hudson.util.ArgumentListBuilder;
+import jenkins.security.MasterToSlaveCallable;
+import net.sf.json.JSONObject;
+
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.LineIterator;
 import org.apache.commons.io.output.TeeOutputStream;
 import org.apache.commons.lang.StringUtils;
 
 import org.jenkinsci.plugins.docker.commons.credentials.DockerRegistryEndpoint;
+import org.jenkinsci.plugins.docker.commons.credentials.DockerRegistryToken;
 import org.jenkinsci.plugins.docker.commons.credentials.DockerServerEndpoint;
 import org.jenkinsci.plugins.docker.commons.credentials.KeyMaterial;
+import org.jenkinsci.plugins.docker.commons.credentials.KeyMaterialFactory;
 import org.jenkinsci.plugins.docker.commons.tools.DockerTool;
+
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
+import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PrintStream;
 import java.io.StringReader;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
+import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -65,15 +79,14 @@ public class Docker implements Closeable {
         this.privileged = privileged;
     }
 
-
     private KeyMaterial dockerEnv;
 
     public void setupCredentials(AbstractBuild build) throws IOException, InterruptedException {
-        this.dockerEnv = dockerHost.newKeyMaterialFactory(build)
-                .plus(   registryEndpoint.newKeyMaterialFactory(build))
+        this.dockerEnv = workaroundDockercfgUsage(build.getWorkspace().getChannel())
+                .plus(dockerHost.newKeyMaterialFactory(build))
+                .plus(registryEndpoint.newKeyMaterialFactory(build))
                 .materialize();
     }
-
 
     @Override
     public void close() throws IOException {
@@ -133,7 +146,6 @@ public class Docker implements Closeable {
         args.add("--label", "jenkins-build-number=" + this.build.getNumber());
 
         OutputStream logOutputStream = listener.getLogger();
-        OutputStream err = listener.getLogger();
 
         ByteArrayOutputStream resultOutputStream = new ByteArrayOutputStream();
         TeeOutputStream teeOutputStream = new TeeOutputStream(logOutputStream, resultOutputStream);
@@ -141,19 +153,21 @@ public class Docker implements Closeable {
         int status = launcher.launch()
                 .envs(getEnvVars())
                 .cmds(args)
-                .stdout(teeOutputStream).stderr(err).join();
+                .stdout(teeOutputStream).stderr(teeOutputStream).join();
         if (status != 0) {
             throw new RuntimeException("Failed to build docker image from project Dockerfile");
         }
 
-        Pattern pattern = Pattern.compile("Successfully built (.*)");
-        Matcher matcher = pattern.matcher(resultOutputStream.toString("UTF-8"));
-        if (!matcher.find())
-        {
-            throw new RuntimeException("Failed to lookup the docker build ImageID.");
+        String outStr = resultOutputStream.toString("UTF-8");
+        Matcher matcher = Pattern.compile("writing image (.*) done").matcher(outStr);
+        if (!matcher.find()) {
+            matcher = Pattern.compile("Successfully built (.*)").matcher(outStr);
+            if (!matcher.find()) {
+                throw new RuntimeException("Failed to lookup the docker build ImageID.");
+            }
         }
 
-        // find the last occurrence of "Successfully built"
+        // find the last occurrence of the image ID
         String imageId;
         do {
             imageId = matcher.group(matcher.groupCount());
@@ -445,5 +459,11 @@ public class Docker implements Closeable {
             args.add(dockerHost.getUri());
         }
         return args;
+    }
+
+    public KeyMaterialFactory workaroundDockercfgUsage(@NonNull VirtualChannel target)
+            throws InterruptedException, IOException {
+        target.call(new WorkaroundDockerCfg());
+        return KeyMaterialFactory.NULL;
     }
 }
