@@ -10,18 +10,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Get all the letters, words and paragraphs needed for the spell!
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Prepare the cauldron and the wand!
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v3
         with:
           java-version: '8'
           distribution: 'adopt'
-      - name: Wave your wand then let potion brew for 2 minutes.
-        uses: actions/cache@v3
-        with:
-          path: ~/.m2/repository
-          key: maven-cache-${{ hashFiles('**/pom.xml') }}
+          cache: 'maven'
       - name: Maven, now you do the magic! I enchant you the Bash way!
-        run: |
-          mvn --batch-mode --update-snapshots install
+        run: mvn --batch-mode --update-snapshots install

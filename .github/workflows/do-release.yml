@@ -19,10 +19,9 @@ jobs:
   do-release:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-    - name: Set up Java and credentials
-      uses: actions/setup-java@v2
+    - uses: actions/checkout@v3
+    - name: Set up Java
+      uses: actions/setup-java@v3
       with:
         java-version: 8
         distribution: 'adopt'
@@ -31,12 +30,7 @@ jobs:
         server-password: MAVEN_PASSWORD
         gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
         gpg-passphrase: MAVEN_GPG_PASSPHRASE
-    - name: Use Local Maven cache
-      uses: actions/cache@v3
-      with:
-        path: ~/.m2/repository
-        key: maven-cache-${{ hashFiles('**/pom.xml') }}
-
+        cache: 'maven'
 
     - name: Do the Deployment and related stuff
       run: |

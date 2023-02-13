@@ -14,9 +14,9 @@ jobs:
     if: github.repository_owner == 'hazelcast'
 
     steps:
-      - uses: actions/checkout@v2
-      - name: Set up Apache Maven Central
-        uses: actions/setup-java@v2
+      - uses: actions/checkout@v3
+      - name: Set up Java
+        uses: actions/setup-java@v3
         with:
           java-version: 8
           distribution: 'adopt'
@@ -25,12 +25,7 @@ jobs:
           server-password: MAVEN_PASSWORD
           gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
-      - name: Use Local Maven cache
-        uses: actions/cache@v3
-        with:
-          path: ~/.m2/repository
-          key: maven-cache-${{ hashFiles('**/pom.xml') }}
-
+          cache: 'maven'
       - name: Publish to Apache Maven Central
         run: |
           PROJECT_VERSION=$(mvn -q -Dexec.executable=echo -Dexec.args='${project.version}' --non-recursive exec:exec)
