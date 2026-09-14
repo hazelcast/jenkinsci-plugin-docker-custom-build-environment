@@ -199,24 +199,19 @@ public class DockerBuildWrapper extends BuildWrapper {
         return new ContainerCleanupEnvironment();
     }
 
-    private String startBuildContainer(BuiltInContainer runInContainer, AbstractBuild build, BuildListener listener) throws IOException {
-        try {
-            EnvVars environment = buildContainerEnvironment(build, listener);
+    private String startBuildContainer(BuiltInContainer runInContainer, AbstractBuild build, BuildListener listener) throws IOException, InterruptedException {
+        EnvVars environment = buildContainerEnvironment(build, listener);
 
-            String workdir = build.getWorkspace().getRemote();
+        String workdir = build.getWorkspace().getRemote();
 
-            Map<String, String> links = new HashMap<String, String>();
+        Map<String, String> links = new HashMap<String, String>();
 
-            String[] command = this.command.length() > 0 ? this.command.split(" ") : new String[0];
+        String[] command = this.command.length() > 0 ? this.command.split(" ") : new String[0];
 
-            return runInContainer.getDocker().runDetached(runInContainer.image, workdir,
-                    runInContainer.getVolumes(build), runInContainer.getPortsMap(), links,
-                    environment, build.getSensitiveBuildVariables(), net, memory, cpu,
-                    command); // Command expected to hung until killed
-
-        } catch (InterruptedException e) {
-            throw new RuntimeException("Interrupted");
-        }
+        return runInContainer.getDocker().runDetached(runInContainer.image, workdir,
+                runInContainer.getVolumes(build), runInContainer.getPortsMap(), links,
+                environment, build.getSensitiveBuildVariables(), net, memory, cpu,
+                command); // Command expected to hung until killed
     }
 
     /**
