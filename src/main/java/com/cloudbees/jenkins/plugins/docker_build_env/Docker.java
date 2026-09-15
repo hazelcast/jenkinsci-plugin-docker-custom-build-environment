@@ -5,10 +5,6 @@ import hudson.FilePath;
 import hudson.Launcher;
 import hudson.model.AbstractBuild;
 import hudson.model.Computer;
-import hudson.model.Run;
-import hudson.security.ACL;
-import hudson.security.ACLContext;
-import jenkins.model.Jenkins;
 import hudson.model.TaskListener;
 import hudson.remoting.VirtualChannel;
 import hudson.util.ArgumentListBuilder;
@@ -46,10 +42,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * @author <a href="mailto:nicolas.deloof@gmail.com">Nicolas De Loof</a>
@@ -57,6 +56,7 @@ import java.util.concurrent.TimeUnit;
 public class Docker implements Closeable {
 
     private static boolean debug = Boolean.getBoolean(Docker.class.getName()+".debug");
+    private static final Random CPU_RANDOMIZER = new Random();
 
     private final Launcher launcher;
     private final TaskListener listener;
@@ -205,15 +205,17 @@ public class Docker implements Closeable {
     }
 
     public String runDetached(String image, String workdir, Map<String, String> volumes, Map<Integer, Integer> ports, Map<String, String> links, EnvVars environment, Set sensitiveBuildVariables, String net, String memory, String cpu, String... command) throws IOException, InterruptedException {
+        return runDetached(image, workdir, volumes, ports, links, environment, sensitiveBuildVariables,
+                net, memory, cpu, false, command);
+    }
+
+    public String runDetached(String image, String workdir, Map<String, String> volumes, Map<Integer, Integer> ports, Map<String, String> links, EnvVars environment, Set sensitiveBuildVariables, String net, String memory, String cpu, boolean cpuQuotaOnly, String... command) throws IOException, InterruptedException {
 
         String docker0 = getDocker0Ip(launcher, image);
 
 
-        int cpuCount = StringUtils.isBlank(cpu) ? 0 : Integer.parseInt(cpu);
-        ArgumentListBuilder args = new ArgumentListBuilder(cpuCount > 0 ? "create" : "run", "--tty");
-        if (cpuCount <= 0) {
-            args.add("--detach");
-        }
+        ArgumentListBuilder args = dockerCommand()
+            .add("run", "--tty", "--detach");
         args.add("--name", this.build.getProject().getName().replaceAll("[=.,]", "_") + "-" + this.build.getNumber());
 
         if (privileged) {
@@ -238,6 +240,11 @@ public class Docker implements Closeable {
             args.add("--memory", memory);
         }
 
+        if (StringUtils.isNotBlank(cpu)) {
+            int cpuCount = Integer.parseInt(cpu);
+            addCpuParams(args, cpuCount, cpuQuotaOnly);
+        }
+
         if (!"host".equals(net)){
             //--add-host and --net=host are incompatible
             args.add("--add-host", "dockerhost:"+docker0);
@@ -253,29 +260,7 @@ public class Docker implements Closeable {
             else
                 args.add(e.getKey()+"="+e.getValue());
         }
-        if (cpuCount > 0) {
-            String controller = Jenkins.get().getLegacyInstanceId();
-            args.add("--label", CpuContainer.CONTROLLER_LABEL + "=" + controller)
-                    .add("--label", CpuContainer.BUILD_LABEL + "=" + build.getExternalizableId());
-            CpuContainer allocation = new CpuContainer(commandArgs -> dockerOutput(commandArgs.clone()
-                    .prepend(dockerCommandArgs().toArray(new String[0]))), controller,
-                    Docker::isBuildActive, listener.getLogger()::println);
-            return allocation.start(args.add(image).add(command), cpuCount);
-        }
-        return runContainer(args.add(image).add(command).prepend(dockerCommandArgs().toArray(new String[0])));
-    }
-
-    private static boolean isBuildActive(String id) {
-        // Build permissions must not make another live job look like an abandoned container.
-        try (ACLContext ignored = ACL.as(ACL.SYSTEM)) {
-            Run<?, ?> owner = Run.fromExternalizableId(id);
-            return owner == null || owner.isLogUpdated(); // Unknown ownership is not proof of abandonment.
-        } catch (IllegalArgumentException e) {
-            return true; // Malformed ownership is not sufficient authority to remove a container.
-        }
-    }
-
-    private String runContainer(ArgumentListBuilder args) throws IOException, InterruptedException {
+        args.add(image).add(command);
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
 
@@ -292,15 +277,65 @@ public class Docker implements Closeable {
     }
 
 
-    private String dockerOutput(ArgumentListBuilder args) throws IOException, InterruptedException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        int status = launcher.launch().envs(getEnvVars()).cmds(args).stdout(out)
-                .quiet(!verbose).stderr(listener.getLogger()).start().joinWithTimeout(60, TimeUnit.SECONDS, listener);
-        if (status != 0) {
-            throw new IOException("Docker CPU allocation command failed (exit " + status + ")");
+    private void addCpuParams(ArgumentListBuilder args, int cpuCount, boolean cpuQuotaOnly) throws IOException, InterruptedException {
+        if (cpuCount < 1) {
+            return;
         }
-        return out.toString("UTF-8").trim();
+        args.add("--cpus", Integer.toString(cpuCount));
+        if (cpuQuotaOnly) {
+            return;
+        }
+        int availableProcessors = getAvailableProcessors();
+        listener.getLogger().println("availableProcessors on the slave machine: " + availableProcessors);
+        int maxCpus = Math.min(availableProcessors, cpuCount);
+        if (maxCpus < availableProcessors && isCpusetNeeded()) {
+            SortedSet<Integer> cpuSet = new TreeSet<>();
+            while (cpuSet.size() < maxCpus) {
+                cpuSet.add(CPU_RANDOMIZER.nextInt(availableProcessors));
+            }
+            String cpuSetString = cpuSet.stream().map(i -> i.toString()).collect(Collectors.joining(","));
+            listener.getLogger().println("Assigning the following random CPUs (--cpuset-cpus=) " + cpuSetString);
+            args.add("--cpuset-cpus", cpuSetString);
+        }
     }
+
+    private int getAvailableProcessors() throws IOException, InterruptedException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        int status = launcher.launch().envs(getEnvVars()).cmds("nproc").stdout(out).quiet(!verbose).stderr(listener.getLogger())
+                .join();
+        if (status != 0) {
+            throw new RuntimeException("Failed to run the nproc");
+        }
+
+        int nproc = Integer.parseInt(out.toString("UTF-8").trim());
+        return nproc;
+    }
+
+
+    private boolean isCpusetNeeded() throws IOException, InterruptedException {
+        ArgumentListBuilder args = dockerCommand()
+                .add("run", "--rm")
+                .add("--entrypoint")
+                .add("/usr/bin/nproc")
+                .add("--cpus")
+                .add("1")
+                .add("alpine:3.16");
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        int status = launcher.launch()
+                .envs(getEnvVars())
+                .cmds(args)
+                .stdout(out).quiet(!verbose).stderr(listener.getLogger()).join();
+
+        if (status != 0) {
+            throw new RuntimeException("Failed to run docker CPU count check");
+        }
+
+        int nproc = Integer.parseInt(out.toString("UTF-8").trim());
+        listener.getLogger().println("Checking 1 CPU limit. Number of procs with --cpus 1 (without --cpuset-cpus argument) visible in Docker " + nproc);
+        return nproc > 1;
+    }
+
 
     private String getDocker0Ip(Launcher launcher, String image) throws IOException, InterruptedException {
 

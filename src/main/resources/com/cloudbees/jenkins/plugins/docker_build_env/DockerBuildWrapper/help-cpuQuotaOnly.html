@@ -1,0 +1,7 @@
+<p>Keep the configured CPU quota without pinning the container to a random CPU set.
+The host OS schedules threads across the container's eligible CPUs. This option is
+unchecked by default and has no effect when the CPU limit is blank, zero or negative.</p>
+<p>Check the processor count and parallelism used by your build and test processes
+before enabling this option. Some runtimes and tools see the host CPU count despite
+a quota. Configure their parallelism in the job where needed; the plugin does not
+set JVM options. A CPU quota does not reserve capacity or prevent contention.</p>

@@ -1,10 +1,2 @@
-<p>A positive number limits the job to that many logical CPUs. Builds started by this Jenkins
-controller on the same Docker daemon receive disjoint CPU sets and wait for capacity when necessary.
-A waiting build still occupies its Jenkins executor and can be aborted. Requests larger than the
-daemon's eligible CPU set fail.</p>
-<p>Leave blank or use zero for no CPU limit. Unrestricted containers and host processes can still
-compete for these CPUs. Separate Jenkins controllers are not coordinated.</p>
-<p>Failed startup triggers container cleanup. Later builds retry cleanup of containers whose owning
-build has finished; affected CPUs remain reserved until removal succeeds. Unknown owners require
-manual inspection. Recovery does not require restarting Jenkins.</p>
-<p>Requires Linux containers and Docker API 1.29 or newer.</p>
+This advanced option let you limit the number of CPUs used by the job.
+You should not change this option until you have some advanced requirements.
