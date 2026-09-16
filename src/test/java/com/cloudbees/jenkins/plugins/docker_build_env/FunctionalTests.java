@@ -1,5 +1,10 @@
 package com.cloudbees.jenkins.plugins.docker_build_env;
 
+import hudson.Launcher;
+import hudson.model.AbstractBuild;
+import hudson.model.BuildListener;
+import hudson.model.TaskListener;
+import hudson.util.ArgumentListBuilder;
 import hudson.model.FreeStyleBuild;
 import hudson.model.FreeStyleProject;
 import hudson.model.Result;
@@ -10,11 +15,16 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.SingleFileSCM;
+import org.jvnet.hudson.test.TestBuilder;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.Collections;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 
 /**
@@ -59,6 +69,50 @@ public class FunctionalTests {
         String s = FileUtils.readFileToString(build.getLogFile());
         assertThat(s, containsString("nproc==1xxx"));
         jenkins.buildAndAssertSuccess(project);
+    }
+
+    @Test
+    public void test_cpu_quota_only() throws Exception {
+        assertQuotaOnlyLimits("1", "1000000000");
+    }
+
+    @Test
+    public void test_cpu_quota_only_without_limit() throws Exception {
+        assertQuotaOnlyLimits(null, "0");
+    }
+
+    private void assertQuotaOnlyLimits(String cpus, final String expectedQuota) throws Exception {
+        FreeStyleProject project = jenkins.createFreeStyleProject();
+        DockerBuildWrapper wrapper = new DockerBuildWrapper(new PullDockerImageSelector("alpine:3.16"),
+                "", new DockerServerEndpoint("", ""), "", true, false, Collections.<Volume>emptyList(),
+                null, "cat", false, "bridge", null, cpus, false);
+        wrapper.setCpuQuotaOnly(true);
+        project.getBuildWrappersList().add(wrapper);
+        project.getBuildersList().add(new Shell("echo quota-only-build"));
+        project.getBuildersList().add(new TestBuilder() {
+            @Override
+            public boolean perform(AbstractBuild<?, ?> build, Launcher launcher, BuildListener listener)
+                    throws IOException, InterruptedException {
+                String container = build.getAction(BuiltInContainer.class).container;
+                assertEquals(expectedQuota + "|", docker("inspect", "--format",
+                        "{{.HostConfig.NanoCpus}}|{{.HostConfig.CpusetCpus}}", container));
+                return true;
+            }
+        });
+        FreeStyleBuild build = jenkins.buildAndAssertSuccess(project);
+        jenkins.assertLogContains("quota-only-build", build);
+        String log = FileUtils.readFileToString(build.getLogFile());
+        assertFalse(log.contains("Checking 1 CPU limit"));
+        assertFalse(log.contains("availableProcessors on the slave machine"));
+    }
+
+    private String docker(String... arguments) throws IOException, InterruptedException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        ArgumentListBuilder command = new ArgumentListBuilder("docker").add(arguments);
+        int status = new Launcher.LocalLauncher(TaskListener.NULL).launch().cmds(command)
+                .stdout(output).stderr(System.err).join();
+        assertEquals("Docker command failed: " + command, 0, status);
+        return output.toString("UTF-8").trim();
     }
 
     @Test

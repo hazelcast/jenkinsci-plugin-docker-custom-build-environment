@@ -70,6 +70,9 @@ THE SOFTWARE.
           <f:entry field="cpu" title="CPUs">
             <f:textbox/>
           </f:entry>
+          <f:entry field="cpuQuotaOnly" title="Use CPU quota without pinning">
+            <f:checkbox/>
+          </f:entry>
         </f:advanced>
 
     </f:nested>

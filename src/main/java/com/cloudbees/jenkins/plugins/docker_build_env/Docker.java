@@ -205,6 +205,11 @@ public class Docker implements Closeable {
     }
 
     public String runDetached(String image, String workdir, Map<String, String> volumes, Map<Integer, Integer> ports, Map<String, String> links, EnvVars environment, Set sensitiveBuildVariables, String net, String memory, String cpu, String... command) throws IOException, InterruptedException {
+        return runDetached(image, workdir, volumes, ports, links, environment, sensitiveBuildVariables,
+                net, memory, cpu, false, command);
+    }
+
+    public String runDetached(String image, String workdir, Map<String, String> volumes, Map<Integer, Integer> ports, Map<String, String> links, EnvVars environment, Set sensitiveBuildVariables, String net, String memory, String cpu, boolean cpuQuotaOnly, String... command) throws IOException, InterruptedException {
 
         String docker0 = getDocker0Ip(launcher, image);
 
@@ -237,7 +242,7 @@ public class Docker implements Closeable {
 
         if (StringUtils.isNotBlank(cpu)) {
             int cpuCount = Integer.parseInt(cpu);
-            addCpuParams(args, cpuCount);
+            addCpuParams(args, cpuCount, cpuQuotaOnly);
         }
 
         if (!"host".equals(net)){
@@ -272,14 +277,17 @@ public class Docker implements Closeable {
     }
 
 
-    private void addCpuParams(ArgumentListBuilder args, int cpuCount) throws IOException, InterruptedException {
+    private void addCpuParams(ArgumentListBuilder args, int cpuCount, boolean cpuQuotaOnly) throws IOException, InterruptedException {
         if (cpuCount < 1) {
+            return;
+        }
+        args.add("--cpus", Integer.toString(cpuCount));
+        if (cpuQuotaOnly) {
             return;
         }
         int availableProcessors = getAvailableProcessors();
         listener.getLogger().println("availableProcessors on the slave machine: " + availableProcessors);
         int maxCpus = Math.min(availableProcessors, cpuCount);
-        args.add("--cpus", Integer.toString(cpuCount));
         if (maxCpus < availableProcessors && isCpusetNeeded()) {
             SortedSet<Integer> cpuSet = new TreeSet<>();
             while (cpuSet.size() < maxCpus) {

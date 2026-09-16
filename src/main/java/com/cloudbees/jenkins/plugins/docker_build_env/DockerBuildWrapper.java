@@ -26,6 +26,7 @@ import org.jenkinsci.plugins.docker.commons.credentials.DockerRegistryToken;
 import org.jenkinsci.plugins.docker.commons.credentials.DockerServerEndpoint;
 import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
+import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
 
 import java.io.ByteArrayOutputStream;
@@ -72,6 +73,8 @@ public class DockerBuildWrapper extends BuildWrapper {
     private String memory;
 
     private String cpu;
+
+    private boolean cpuQuotaOnly;
 
     private final boolean noCache;
 
@@ -142,6 +145,15 @@ public class DockerBuildWrapper extends BuildWrapper {
 
     public String getCpu() { return cpu;}
 
+    public boolean isCpuQuotaOnly() {
+        return cpuQuotaOnly;
+    }
+
+    @DataBoundSetter
+    public void setCpuQuotaOnly(boolean cpuQuotaOnly) {
+        this.cpuQuotaOnly = cpuQuotaOnly;
+    }
+
     public boolean isNoCache() {
         return noCache;
     }
@@ -211,7 +223,7 @@ public class DockerBuildWrapper extends BuildWrapper {
 
             return runInContainer.getDocker().runDetached(runInContainer.image, workdir,
                     runInContainer.getVolumes(build), runInContainer.getPortsMap(), links,
-                    environment, build.getSensitiveBuildVariables(), net, memory, cpu,
+                    environment, build.getSensitiveBuildVariables(), net, memory, cpu, cpuQuotaOnly,
                     command); // Command expected to hung until killed
 
         } catch (InterruptedException e) {
