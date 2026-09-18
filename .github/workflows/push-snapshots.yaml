@@ -3,6 +3,7 @@ name: Deploy snapshots
 # see https://docs.github.com/en/actions/guides/publishing-java-packages-with-maven
 
 on:
+  pull_request:
   push:
     branches:
       - hazelcast-patches
@@ -20,7 +21,7 @@ jobs:
         with:
           java-version: 8
           distribution: 'adopt'
-          server-id: ossrh
+          server-id: maven-central
           server-username: MAVEN_USERNAME
           server-password: MAVEN_PASSWORD
           gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
