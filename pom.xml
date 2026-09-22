@@ -142,7 +142,7 @@
                             <autoPublish>true</autoPublish>
                             <checksums>required</checksums>
                             <centralSnapshotsUrl>https://central.sonatype.com/repository/maven-snapshots</centralSnapshotsUrl>
-                            <deploymentName>Deployment ${project.artifactId}</deploymentName>
+                            <deploymentName>${project.artifactId}</deploymentName>
                         </configuration>
                     </plugin>
                     <plugin>
