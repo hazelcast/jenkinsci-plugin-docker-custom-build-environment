@@ -53,7 +53,7 @@
         <dependency>
             <groupId>org.jenkins-ci.plugins</groupId>
             <artifactId>docker-commons</artifactId>
-            <version>1.21</version>
+            <version>477.v289085a_b_6896</version>
         </dependency>
         <dependency>
             <groupId>org.jenkins-ci.main</groupId>
